@@ -1,0 +1,523 @@
+{
+  "minecraft": "26.2",
+  "loader": "Fabric",
+  "javaEdition": true,
+  "modules": [
+    {
+      "name": "CyberCircuit Client",
+      "role": "core client",
+      "source": "local build",
+      "minecraft": "26.2",
+      "jar": "CyberCircuit-Client-26.2.jar",
+      "install": "automatic"
+    },
+    {
+      "name": "Baritone",
+      "role": "pathfinding / automation / schematic building",
+      "source": "https://github.com/cabaletta/baritone",
+      "release": "v1.19.0",
+      "minecraft": "26.2",
+      "fabric_asset": "baritone-standalone-fabric-1.19.0.jar",
+      "jar": "CyberCircuit-Baritone-26.2.jar",
+      "install": "automatic"
+    },
+    {
+      "name": "Fabric API",
+      "role": "Fabric dependency",
+      "source": "https://maven.fabricmc.net/",
+      "release": "0.158.0+26.2",
+      "minecraft": "26.2",
+      "jar": "fabric-api-0.158.0+26.2.jar",
+      "install": "automatic"
+    },
+    {
+      "name": "Wurst Client",
+      "role": "separate companion hacked-client module",
+      "source": "https://github.com/Wurst-Imperium/Wurst-MCX2",
+      "release": "7.55.1",
+      "minecraft": "26.2",
+      "jar": "Wurst-Client-v7.55.1-MC26.2.jar",
+      "install": "automatic"
+    },
+    {
+      "name": "Keystrokes",
+      "role": "CyberCircuit v26 feature module",
+      "category": "HUD",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "CPS Counter",
+      "role": "CyberCircuit v26 feature module",
+      "category": "HUD",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "FPS Counter",
+      "role": "CyberCircuit v26 feature module",
+      "category": "HUD",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Coordinates",
+      "role": "CyberCircuit v26 feature module",
+      "category": "HUD",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Hitboxes",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Render",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Fullbright",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Render",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Zoom",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Render",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Auto Tool",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Player",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Toggle Sprint",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Movement",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Schematic Builder",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Automation",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Ping",
+      "role": "CyberCircuit v26 feature module",
+      "category": "HUD",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Armor HUD",
+      "role": "CyberCircuit v26 feature module",
+      "category": "HUD",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Potion HUD",
+      "role": "CyberCircuit v26 feature module",
+      "category": "HUD",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Clock",
+      "role": "CyberCircuit v26 feature module",
+      "category": "HUD",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Memory / CPU HUD",
+      "role": "CyberCircuit v26 feature module",
+      "category": "HUD",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Session Info",
+      "role": "CyberCircuit v26 feature module",
+      "category": "HUD",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Crosshair Editor",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Render",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Low Fire",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Render",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Hit Color",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Combat",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Attack Indicator",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Combat",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Reach Display",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Combat",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Totem Counter",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Combat",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Inventory / Hotbar HUD",
+      "role": "CyberCircuit v26 feature module",
+      "category": "HUD",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Combat Info Panel",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Combat",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Toggle Sneak",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Movement",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "FOV Modifier",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Render",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Speedometer",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Movement",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Jump / Movement Statistics",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Movement",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Waypoints",
+      "role": "CyberCircuit v26 feature module",
+      "category": "World",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Minimap",
+      "role": "CyberCircuit v26 feature module",
+      "category": "World",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Entity ESP",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Render",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Block ESP",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Render",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Light Level Overlay",
+      "role": "CyberCircuit v26 feature module",
+      "category": "World",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Chunk Borders",
+      "role": "CyberCircuit v26 feature module",
+      "category": "World",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Structure Locator UI",
+      "role": "CyberCircuit v26 feature module",
+      "category": "World",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Biome Display",
+      "role": "CyberCircuit v26 feature module",
+      "category": "World",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Durability Warnings",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Player",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Schematic Browser",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Automation",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Build Progress HUD",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Automation",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Path Preview",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Automation",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Auto-Reconnect",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Utility",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "AFK Protection / Status",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Utility",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "ClickGUI",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Client",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "HUD Editor",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Client",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "GUI Scale Controls",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Client",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Custom Themes",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Client",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Custom Fonts",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Client",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Module Profiles",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Client",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Config Import / Export",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Client",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Keybind Editor",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Client",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "FPS Limiter",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Performance",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Entity Render Distance",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Performance",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Particle Controls",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Performance",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Animation Controls",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Performance",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Dynamic Render Distance",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Performance",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Performance Monitor",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Performance",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Memory Status",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Performance",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Fast Menu",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Performance",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Inventory Search",
+      "role": "CyberCircuit v26 feature module",
+      "category": "Player",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    },
+    {
+      "name": "Item Info Overlay",
+      "role": "CyberCircuit v26 feature module",
+      "category": "HUD",
+      "source": "CyberCircuit Client",
+      "minecraft": "26.2",
+      "install": "catalog entry; implementation staged"
+    }
+  ]
+}

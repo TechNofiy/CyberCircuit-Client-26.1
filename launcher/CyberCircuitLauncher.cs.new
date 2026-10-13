@@ -1,0 +1,1557 @@
+using System;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.IO;
+using System.Diagnostics;
+using System.Windows.Forms;
+using System.Collections.Generic;
+
+namespace CyberCircuitLauncherApp
+{
+    internal sealed class ModuleDef
+    {
+        public string Key;
+        public string Name;
+        public string Description;
+        public string Category;
+        public bool DefaultEnabled;
+        public bool JarManaged = true;
+    }
+
+    public sealed class MainForm : Form
+    {
+        private readonly string AppRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CyberCircuit");
+        private string MinecraftDir;
+        private string LibraryDir;
+        private string ProfilesDir;
+        private string SettingsPath;
+        private string ManagedManifestPath;
+        private const string CoreJarName = "CyberCircuit-Client-26.2.jar";
+        private const string BaritoneJarName = "CyberCircuit-Baritone-26.2.jar";
+        private const string WurstJarName = "Wurst-Client-v7.55.1-MC26.2.jar";
+        private const string FabricApiJarName = "fabric-api-0.158.0+26.2.jar";
+
+        private readonly List<ModuleDef> Modules = new List<ModuleDef>();
+        private readonly Dictionary<string, CheckBox> ModuleChecks = new Dictionary<string, CheckBox>(StringComparer.OrdinalIgnoreCase);
+
+        private readonly Color Bg = Color.FromArgb(8, 10, 14);
+        private readonly Color PanelColor = Color.FromArgb(15, 19, 26);
+        private readonly Color PanelColor2 = Color.FromArgb(20, 25, 34);
+        private readonly Color PanelColor3 = Color.FromArgb(24, 30, 41);
+        private readonly Color WhiteText = Color.FromArgb(236, 241, 248);
+        private readonly Color Muted = Color.FromArgb(139, 149, 164);
+        private readonly Color Blue = Color.FromArgb(0, 150, 235);
+        private readonly Color Green = Color.FromArgb(55, 205, 105);
+        private readonly Color Red = Color.FromArgb(245, 95, 95);
+        private readonly Color Yellow = Color.FromArgb(255, 190, 75);
+
+        private Panel body;
+        private Panel navPanel;
+        private Panel viewPanel;
+        private Panel detailPanel;
+        private Panel modulePanel;
+        private ComboBox profileBox;
+        private TextBox minecraftPathBox;
+        private CheckBox autoApplyBox;
+        private Label statusLabel;
+        private Label minecraftStatus;
+        private Label selectedTitle;
+        private Label selectedDescription;
+        private Label selectedMeta;
+        private Button applyButton;
+        private Button launchButton;
+        private Button playTopButton;
+        private Button settingsTopButton;
+        private string selectedModule = "cybercircuit";
+        private string currentView = "mods";
+        private bool renderingModules;
+        private Panel moduleViewport;
+        private Panel moduleContent;
+        private VScrollBar moduleScroll;
+        private readonly List<Panel> moduleRows = new List<Panel>();
+        private int moduleContentHeight;
+        private bool updatingModuleScroll;
+
+        public MainForm()
+        {
+            MinecraftDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ".minecraft");
+            LibraryDir = Path.Combine(AppRoot, "ModLibrary");
+            ProfilesDir = Path.Combine(AppRoot, "profiles");
+            SettingsPath = Path.Combine(AppRoot, "launcher.settings");
+            ManagedManifestPath = Path.Combine(AppRoot, "managed-mods.txt");
+
+            Directory.CreateDirectory(AppRoot);
+            Directory.CreateDirectory(LibraryDir);
+            Directory.CreateDirectory(ProfilesDir);
+            LoadSettings();
+
+            base.Text = "CyberCircuit Launcher";
+            Width = 1120;
+            Height = 720;
+            MinimumSize = new Size(980, 640);
+            StartPosition = FormStartPosition.CenterScreen;
+            BackColor = Bg;
+            ForeColor = WhiteText;
+            FormBorderStyle = FormBorderStyle.Sizable;
+            MaximizeBox = true;
+            MinimizeBox = true;
+            KeyPreview = true;
+
+            EnsureLibraryFromMinecraft();
+            LoadModules();
+            BuildUi();
+            LoadProfiles();
+            if (profileBox.Items.Count > 0) profileBox.SelectedIndex = 0;
+            RenderModules();
+            RefreshMinecraftStatus();
+            ShowView("mods");
+            KeyDown += MainForm_KeyDown;
+        }
+
+        private void MainForm_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.F11)
+            {
+                if (FormBorderStyle == FormBorderStyle.None)
+                {
+                    FormBorderStyle = FormBorderStyle.Sizable;
+                    WindowState = FormWindowState.Normal;
+                    MaximizeBox = true;
+                }
+                else
+                {
+                    FormBorderStyle = FormBorderStyle.None;
+                    WindowState = FormWindowState.Maximized;
+                }
+                e.Handled = true;
+            }
+        }
+
+        private void LoadSettings()
+        {
+            if (!File.Exists(SettingsPath)) return;
+            try
+            {
+                string[] lines = File.ReadAllLines(SettingsPath);
+                foreach (string line in lines)
+                {
+                    int p = line.IndexOf('=');
+                    if (p <= 0) continue;
+                    string key = line.Substring(0, p).Trim();
+                    string value = line.Substring(p + 1).Trim();
+                    if (key.Equals("minecraftDir", StringComparison.OrdinalIgnoreCase) && value.Length > 0)
+                        MinecraftDir = value;
+                }
+            }
+            catch { }
+        }
+
+        private void SaveSettings()
+        {
+            try
+            {
+                Directory.CreateDirectory(AppRoot);
+                using (StreamWriter sw = new StreamWriter(SettingsPath, false))
+                {
+                    sw.WriteLine("minecraftDir=" + MinecraftDir);
+                    sw.WriteLine("autoApply=" + (autoApplyBox != null && autoApplyBox.Checked ? "true" : "false"));
+                }
+            }
+            catch { }
+        }
+
+        private void LoadModules()
+        {
+            Modules.Clear();
+            Modules.Add(new ModuleDef { Key = "cybercircuit", Name = "CyberCircuit Client", Category = "Client", Description = "CyberCircuit 26.2 core client and its in-game module manager.", DefaultEnabled = true, JarManaged = true });
+            Modules.Add(new ModuleDef { Key = "baritone", Name = "Baritone", Category = "Automation", Description = "Pathfinding, navigation and schematic-building companion for Fabric 26.2.", DefaultEnabled = true, JarManaged = true });
+            Modules.Add(new ModuleDef { Key = "wurst", Name = "Wurst Client", Category = "Hacks", Description = "Wurst 7.55.1 companion mod for Minecraft 26.2. Its own in-game GUI controls its hacks.", DefaultEnabled = false, JarManaged = true });
+            Modules.Add(new ModuleDef { Key = "fabricapi", Name = "Fabric API", Category = "Dependency", Description = "Fabric API dependency required by the CyberCircuit module set on Minecraft 26.2.", DefaultEnabled = true, JarManaged = true });
+
+            // v26 feature catalog. These are lightweight client-module entries for the UI/profile system.
+            // They are intentionally not treated as external JARs yet, keeping the stable launcher logic intact.
+            AddFeature("keystrokes", "Keystrokes", "HUD", "Displays movement and mouse keys in an in-game overlay.");
+            AddFeature("cps", "CPS Counter", "HUD", "Displays left and right clicks per second.");
+            AddFeature("fps", "FPS Counter", "HUD", "Displays current frames per second.");
+            AddFeature("coordinates", "Coordinates", "HUD", "Displays your current X, Y and Z coordinates.");
+            AddFeature("hitboxes", "Hitboxes", "Render", "Highlights entity hitboxes for easier visual tracking.");
+            AddFeature("fullbright", "Fullbright", "Render", "Client-side brightness mode.");
+            AddFeature("zoom", "Zoom", "Render", "Client-side zoom control for distant builds.");
+            AddFeature("autotool", "Auto Tool", "Player", "Client-side tool selection helper.");
+            AddFeature("togglesprint", "Toggle Sprint", "Movement", "Keeps sprint enabled while movement conditions allow it.");
+            AddFeature("schematicbuilder", "Schematic Builder", "Automation", "Quick access to Baritone schematic building guidance.");
+
+            AddFeature("ping", "Ping", "HUD", "Displays current server latency.");
+            AddFeature("armorhud", "Armor HUD", "HUD", "Displays armor and held-item durability.");
+            AddFeature("potionhud", "Potion HUD", "HUD", "Displays active effects and timers.");
+            AddFeature("clock", "Clock", "HUD", "Displays real-world or in-game time.");
+            AddFeature("memcpu", "Memory / CPU HUD", "HUD", "Shows client memory and CPU usage information.");
+            AddFeature("sessioninfo", "Session Info", "HUD", "Displays session time and gameplay statistics.");
+            AddFeature("crosshair", "Crosshair Editor", "Render", "Customize crosshair shape, size and gap.");
+            AddFeature("lowfire", "Low Fire", "Render", "Reduces the size of the fire overlay.");
+            AddFeature("hitcolor", "Hit Color", "Combat", "Visual feedback when hitting an entity.");
+            AddFeature("attackindicator", "Attack Indicator", "Combat", "Configurable attack cooldown indicator.");
+            AddFeature("reachdistance", "Reach Display", "Combat", "Informational display of attack distance.");
+            AddFeature("totemcounter", "Totem Counter", "Combat", "Displays totems currently available.");
+            AddFeature("inventoryhud", "Inventory / Hotbar HUD", "HUD", "Displays inventory or hotbar information on-screen.");
+            AddFeature("combatinfo", "Combat Info Panel", "Combat", "Displays selected target and combat information.");
+            AddFeature("togglesneak", "Toggle Sneak", "Movement", "Keeps sneak enabled while movement conditions allow it.");
+            AddFeature("fovmodifier", "FOV Modifier", "Render", "Controls field-of-view changes from movement and effects.");
+            AddFeature("speedometer", "Speedometer", "Movement", "Displays current player movement speed.");
+            AddFeature("movementstats", "Jump / Movement Statistics", "Movement", "Tracks jump and movement statistics.");
+            AddFeature("waypoints", "Waypoints", "World", "Create and display saved world locations.");
+            AddFeature("minimap", "Minimap", "World", "Displays a compact configurable world map.");
+            AddFeature("entityesp", "Entity ESP", "Render", "Highlights selected entity types.");
+            AddFeature("blockesp", "Block ESP", "Render", "Highlights selected blocks.");
+            AddFeature("lightlevel", "Light Level Overlay", "World", "Shows block light levels for building and spawn-proofing.");
+            AddFeature("chunkborders", "Chunk Borders", "World", "Displays chunk boundaries.");
+            AddFeature("structurelocator", "Structure Locator UI", "World", "Provides a client-side structure information panel.");
+            AddFeature("biomedisplay", "Biome Display", "World", "Displays the current biome.");
+            AddFeature("durability", "Durability Warnings", "Player", "Warns when equipped items are getting low on durability.");
+            AddFeature("schematicbrowser", "Schematic Browser", "Automation", "Browse available schematic files before building.");
+            AddFeature("buildprogress", "Build Progress HUD", "Automation", "Displays schematic building progress.");
+            AddFeature("pathpreview", "Path Preview", "Automation", "Shows a preview of an automation path.");
+            AddFeature("autoreconnect", "Auto-Reconnect", "Utility", "Reconnects after a supported disconnect condition.");
+            AddFeature("afkstatus", "AFK Protection / Status", "Utility", "Shows AFK state and protection status.");
+            AddFeature("clickgui", "ClickGUI", "Client", "Open and configure CyberCircuit modules through a compact GUI.");
+            AddFeature("hudeditor", "HUD Editor", "Client", "Drag HUD modules around the screen and save their positions.");
+            AddFeature("guiscale", "GUI Scale Controls", "Client", "Quick controls for client GUI scale.");
+            AddFeature("themes", "Custom Themes", "Client", "Switch CyberCircuit visual themes.");
+            AddFeature("fonts", "Custom Fonts", "Client", "Select a supported client font.");
+            AddFeature("moduleprofiles", "Module Profiles", "Client", "Save PvP, Building, SMP and custom module layouts.");
+            AddFeature("configio", "Config Import / Export", "Client", "Import and export CyberCircuit configurations.");
+            AddFeature("keybindeditor", "Keybind Editor", "Client", "Configure module keybinds.");
+            AddFeature("fpslimit", "FPS Limiter", "Performance", "Configure a client-side frame-rate limit.");
+            AddFeature("entityrender", "Entity Render Distance", "Performance", "Adjust client-side entity rendering distance.");
+            AddFeature("particles", "Particle Controls", "Performance", "Control client particle density.");
+            AddFeature("animations", "Animation Controls", "Performance", "Control selected client animations.");
+            AddFeature("dynamicrender", "Dynamic Render Distance", "Performance", "Adjust render distance using a performance profile.");
+            AddFeature("perfmonitor", "Performance Monitor", "Performance", "Display frame and rendering performance information.");
+            AddFeature("memstatus", "Memory Status", "Performance", "Display Java memory allocation and usage.");
+            AddFeature("fastmenu", "Fast Menu", "Performance", "Reduce optional GUI animation and menu overhead.");
+            AddFeature("inventorysearch", "Inventory Search", "Player", "Search visible inventory slots quickly.");
+            AddFeature("iteminfo", "Item Info Overlay", "HUD", "Displays selected item information.");
+
+            LoadImportedModules();
+        }
+
+        private void AddFeature(string key, string name, string category, string description)
+        {
+            Modules.Add(new ModuleDef { Key = "feature_" + key, Name = name, Category = category, Description = description + "\r\n\r\nPlanned for CyberCircuit v26 feature development.", DefaultEnabled = false, JarManaged = false });
+        }
+
+        private bool HasModule(string key)
+        {
+            foreach (ModuleDef m in Modules)
+                if (string.Equals(m.Key, key, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        private bool IsBuiltInName(string name)
+        {
+            if (name.Equals(CoreJarName, StringComparison.OrdinalIgnoreCase)) return true;
+            if (name.StartsWith("cybercircuit-client-", StringComparison.OrdinalIgnoreCase)) return true;
+            if (name.Equals("CyberCircuit-Baritone-26.2.jar", StringComparison.OrdinalIgnoreCase)) return true;
+            if (name.Equals("baritone-standalone-fabric-1.19.0.jar", StringComparison.OrdinalIgnoreCase)) return true;
+            if (name.Equals("CyberCircuit-Wurst-26.2.jar", StringComparison.OrdinalIgnoreCase)) return true;
+            if (name.Equals("Wurst-Client-v7.55.1-MC26.2.jar", StringComparison.OrdinalIgnoreCase)) return true;
+            if (name.StartsWith("fabric-api-", StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        private string MakeModuleKey(string name)
+        {
+            List<char> chars = new List<char>();
+            foreach (char c in name)
+                if (char.IsLetterOrDigit(c)) chars.Add(c);
+            string safe = new string(chars.ToArray());
+            if (safe.Length == 0) safe = "module";
+            if (safe.Length > 80) safe = safe.Substring(0, 80);
+            return "ext_" + safe;
+        }
+
+        private void LoadImportedModules()
+        {
+            if (!Directory.Exists(LibraryDir)) return;
+            string[] files = Directory.GetFiles(LibraryDir, "*.jar");
+            foreach (string file in files)
+            {
+                string name = Path.GetFileName(file);
+                if (IsBuiltInName(name)) continue;
+                string key = MakeModuleKey(name);
+                if (HasModule(key)) continue;
+                Modules.Add(new ModuleDef
+                {
+                    Key = key,
+                    Name = name,
+                    Category = "Imported",
+                    Description = "Imported Fabric mod. Managed by CyberCircuit Launcher.",
+                    DefaultEnabled = false
+                });
+            }
+        }
+
+        private void EnsureLibraryFromMinecraft()
+        {
+            string mods = Path.Combine(MinecraftDir, "mods");
+            if (!Directory.Exists(mods)) return;
+            Directory.CreateDirectory(LibraryDir);
+            string[] files = Directory.GetFiles(mods, "*.jar");
+            foreach (string file in files)
+            {
+                string name = Path.GetFileName(file);
+                bool isKnown = IsBuiltInName(name);
+                if (!isKnown) continue;
+                try
+                {
+                    File.Copy(file, Path.Combine(LibraryDir, name), true);
+                    // Do NOT delete the source JAR here. The launcher should never make a
+                    // valid installed module disappear merely because the app opened.
+                }
+                catch { }
+            }
+        }
+
+        private ModuleDef FindModule(string key)
+        {
+            if (string.IsNullOrWhiteSpace(key)) return null;
+            foreach (ModuleDef m in Modules)
+                if (string.Equals(m.Key, key, StringComparison.OrdinalIgnoreCase)) return m;
+            return null;
+        }
+
+        private string FindLibraryJar(ModuleDef m)
+        {
+            if (m == null || !m.JarManaged || !Directory.Exists(LibraryDir)) return null;
+
+            string[] preferred = null;
+            if (m.Key.Equals("cybercircuit", StringComparison.OrdinalIgnoreCase))
+                preferred = new string[] { CoreJarName };
+            else if (m.Key.Equals("baritone", StringComparison.OrdinalIgnoreCase))
+                preferred = new string[] { BaritoneJarName, "baritone-standalone-fabric-1.19.0.jar" };
+            else if (m.Key.Equals("wurst", StringComparison.OrdinalIgnoreCase))
+                preferred = new string[] { WurstJarName, "CyberCircuit-Wurst-26.2.jar" };
+            else if (m.Key.Equals("fabricapi", StringComparison.OrdinalIgnoreCase))
+                preferred = new string[] { FabricApiJarName };
+            else
+                preferred = new string[] { m.Name };
+
+            foreach (string name in preferred)
+            {
+                string exact = Path.Combine(LibraryDir, name);
+                if (File.Exists(exact)) return exact;
+            }
+
+            try
+            {
+                string[] files = Directory.GetFiles(LibraryDir, "*.jar");
+                foreach (string file in files)
+                {
+                    string name = Path.GetFileName(file);
+                    if (m.Key.Equals("cybercircuit", StringComparison.OrdinalIgnoreCase) &&
+                        name.StartsWith("cybercircuit-client-", StringComparison.OrdinalIgnoreCase)) return file;
+                    if (m.Key.Equals("baritone", StringComparison.OrdinalIgnoreCase) &&
+                        name.IndexOf("baritone", StringComparison.OrdinalIgnoreCase) >= 0) return file;
+                    if (m.Key.Equals("wurst", StringComparison.OrdinalIgnoreCase) &&
+                        name.IndexOf("wurst", StringComparison.OrdinalIgnoreCase) >= 0) return file;
+                    if (m.Key.Equals("fabricapi", StringComparison.OrdinalIgnoreCase) &&
+                        name.StartsWith("fabric-api-", StringComparison.OrdinalIgnoreCase)) return file;
+                    if (name.Equals(m.Name, StringComparison.OrdinalIgnoreCase)) return file;
+                }
+            }
+            catch { }
+
+            return null;
+        }
+
+        private void BuildUi()
+        {
+            SuspendLayout();
+            Controls.Clear();
+            BackColor = Bg;
+            AutoScaleMode = AutoScaleMode.Dpi;
+
+            Panel header = new Panel();
+            header.Dock = DockStyle.Top;
+            header.Height = 96;
+            header.BackColor = PanelColor;
+            header.Padding = new Padding(18, 10, 18, 10);
+            Controls.Add(header);
+
+            // Prominent CyberCircuit logo/mark. It is drawn in-app so it cannot disappear
+            // because an external image file is missing.
+            Panel logo = new Panel();
+            logo.Size = new Size(62, 62);
+            logo.Location = new Point(18, 15);
+            logo.BackColor = Color.FromArgb(10, 15, 22);
+            logo.Cursor = Cursors.Default;
+            logo.Paint += delegate(object sender, PaintEventArgs e)
+            {
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                using (Pen pen = new Pen(Blue, 2))
+                using (GraphicsPath path = new GraphicsPath())
+                {
+                    int r = 10;
+                    Rectangle rect = new Rectangle(2, 2, logo.Width - 5, logo.Height - 5);
+                    path.AddArc(rect.X, rect.Y, r, r, 180, 90);
+                    path.AddArc(rect.Right - r, rect.Y, r, r, 270, 90);
+                    path.AddArc(rect.Right - r, rect.Bottom - r, r, r, 0, 90);
+                    path.AddArc(rect.X, rect.Bottom - r, r, r, 90, 90);
+                    path.CloseFigure();
+                    e.Graphics.DrawPath(pen, path);
+                }
+                using (Brush accent = new SolidBrush(Color.FromArgb(0, 215, 125)))
+                    e.Graphics.FillRectangle(accent, 7, 8, 16, 3);
+                using (Brush accent = new SolidBrush(Color.FromArgb(245, 70, 70)))
+                    e.Graphics.FillRectangle(accent, logo.Width - 23, logo.Height - 11, 16, 3);
+                using (Font f = new Font("Segoe UI", 12, FontStyle.Bold))
+                    TextRenderer.DrawText(e.Graphics, "CC", f, new Rectangle(0, 0, logo.Width, logo.Height), Blue,
+                        TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            };
+            header.Controls.Add(logo);
+
+            Label title = new Label();
+            title.Text = "CYBERCIRCUIT";
+            title.Font = new Font("Segoe UI", 18, FontStyle.Bold);
+            title.ForeColor = WhiteText;
+            title.AutoSize = false;
+            title.Size = new Size(300, 30);
+            title.Location = new Point(94, 12);
+            title.TextAlign = ContentAlignment.MiddleLeft;
+            header.Controls.Add(title);
+
+            Label subtitle = new Label();
+            subtitle.Text = "JAVA EDITION  /  MINECRAFT 26.2  /  FABRIC";
+            subtitle.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+            subtitle.ForeColor = Muted;
+            subtitle.AutoSize = false;
+            subtitle.Size = new Size(420, 22);
+            subtitle.Location = new Point(96, 46);
+            subtitle.TextAlign = ContentAlignment.MiddleLeft;
+            header.Controls.Add(subtitle);
+
+            playTopButton = MakeButton("PLAY JAVA", 0, 0, 128, 38, true);
+            playTopButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            playTopButton.Click += delegate { ApplyAndLaunch(); };
+            header.Controls.Add(playTopButton);
+
+            settingsTopButton = MakeButton("SETTINGS", 0, 0, 98, 38, false);
+            settingsTopButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            settingsTopButton.Click += delegate { ShowView("settings"); };
+            header.Controls.Add(settingsTopButton);
+
+            profileBox = new ComboBox();
+            profileBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            profileBox.Font = new Font("Segoe UI", 9, FontStyle.Bold);
+            profileBox.BackColor = PanelColor2;
+            profileBox.ForeColor = Color.Black;
+            profileBox.Width = 160;
+            profileBox.Height = 34;
+            profileBox.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            profileBox.SelectedIndexChanged += delegate { ApplyCurrentProfileToChecks(); };
+            header.Controls.Add(profileBox);
+
+            Action positionHeader = delegate
+            {
+                int right = Math.Max(20, header.ClientSize.Width - 18);
+                playTopButton.Location = new Point(right - playTopButton.Width, 27);
+                settingsTopButton.Location = new Point(playTopButton.Left - settingsTopButton.Width - 10, 27);
+                profileBox.Location = new Point(settingsTopButton.Left - profileBox.Width - 10, 29);
+            };
+            header.Resize += delegate { positionHeader(); };
+            positionHeader();
+
+            statusLabel = new Label();
+            statusLabel.Text = "Ready.";
+            statusLabel.Dock = DockStyle.Bottom;
+            statusLabel.Height = 30;
+            statusLabel.BackColor = Bg;
+            statusLabel.ForeColor = Muted;
+            statusLabel.Font = new Font("Segoe UI", 8.5f);
+            statusLabel.Padding = new Padding(18, 0, 18, 0);
+            statusLabel.TextAlign = ContentAlignment.MiddleLeft;
+            Controls.Add(statusLabel);
+
+            body = new Panel();
+            body.Dock = DockStyle.Fill;
+            body.BackColor = Bg;
+            body.Padding = new Padding(18, 16, 18, 0);
+            Controls.Add(body);
+
+            navPanel = new Panel();
+            navPanel.Dock = DockStyle.Left;
+            navPanel.Width = 190;
+            navPanel.BackColor = PanelColor;
+            navPanel.Padding = new Padding(12, 12, 12, 10);
+            navPanel.AutoScroll = false;
+            body.Controls.Add(navPanel);
+
+            AddNavButton("MODS", 0, delegate { ShowView("mods"); });
+            AddNavButton("PROFILES", 44, delegate { ShowView("profiles"); });
+            AddNavButton("SETTINGS", 88, delegate { ShowView("settings"); });
+            AddNavButton("REPAIR", 132, delegate { Repair(); });
+            AddNavButton("OPEN MODS", 176, delegate { OpenFolder(Path.Combine(MinecraftDir, "mods")); });
+            AddNavButton("IMPORT MOD", 220, delegate { ImportMod(); });
+
+            minecraftStatus = new Label();
+            minecraftStatus.Text = "JAVA EDITION: checking...";
+            minecraftStatus.Font = new Font("Segoe UI", 7.5f, FontStyle.Bold);
+            minecraftStatus.ForeColor = Muted;
+            minecraftStatus.AutoEllipsis = true;
+            minecraftStatus.Location = new Point(12, 274);
+            minecraftStatus.Size = new Size(164, 82);
+            navPanel.Controls.Add(minecraftStatus);
+
+            viewPanel = new Panel();
+            viewPanel.Dock = DockStyle.Fill;
+            viewPanel.BackColor = Bg;
+            viewPanel.Padding = new Padding(14, 0, 0, 0);
+            body.Controls.Add(viewPanel);
+
+            // Explicit z-order: the header and status bar must always remain above the body.
+            body.SendToBack();
+            statusLabel.BringToFront();
+            header.BringToFront();
+            ResumeLayout(true);
+        }
+
+        private void AddNavButton(string text, int y, EventHandler click)
+        {
+            Button b = MakeButton(text, 12, y, 166, 36, false);
+            b.TextAlign = ContentAlignment.MiddleLeft;
+            b.Padding = new Padding(14, 0, 0, 0);
+            b.Click += click;
+            navPanel.Controls.Add(b);
+        }
+
+        private Button MakeButton(string text, int x, int y, int w, int h, bool accent)
+        {
+            Button b = new Button();
+            b.Text = text;
+            b.Location = new Point(x, y);
+            b.Size = new Size(w, h);
+            b.FlatStyle = FlatStyle.Flat;
+            b.Font = new Font("Segoe UI", 9, FontStyle.Bold);
+            b.ForeColor = Color.White;
+            b.BackColor = accent ? Blue : PanelColor2;
+            b.Cursor = Cursors.Hand;
+            b.FlatAppearance.BorderSize = 0;
+            b.MouseEnter += delegate { b.BackColor = accent ? Color.FromArgb(0, 175, 255) : Color.FromArgb(36, 44, 56); };
+            b.MouseLeave += delegate { b.BackColor = accent ? Blue : PanelColor2; };
+            return b;
+        }
+
+        private void ShowView(string view)
+        {
+            currentView = view;
+            viewPanel.Controls.Clear();
+            detailPanel = null;
+
+            if (view == "mods") BuildModsView();
+            else if (view == "profiles") BuildProfilesView();
+            else BuildSettingsView();
+        }
+
+        private void BuildModsView()
+        {
+            viewPanel.Controls.Clear();
+
+            Panel content = new Panel();
+            content.Dock = DockStyle.Fill;
+            content.BackColor = Bg;
+            content.Padding = new Padding(0);
+            viewPanel.Controls.Add(content);
+
+            detailPanel = new Panel();
+            detailPanel.Dock = DockStyle.Right;
+            detailPanel.Width = 320;
+            detailPanel.BackColor = Color.FromArgb(10, 18, 28);
+            detailPanel.Padding = new Padding(18);
+            content.Controls.Add(detailPanel);
+
+            Panel listHost = new Panel();
+            listHost.Dock = DockStyle.Fill;
+            listHost.BackColor = Bg;
+            listHost.Padding = new Padding(0, 0, 12, 0);
+            content.Controls.Add(listHost);
+
+            Panel top = new Panel();
+            top.Dock = DockStyle.Top;
+            top.Height = 88;
+            top.BackColor = Bg;
+            listHost.Controls.Add(top);
+
+            Label heading = new Label();
+            heading.Text = "✚  MODS";
+            heading.Font = new Font("Segoe UI", 17, FontStyle.Bold);
+            heading.ForeColor = WhiteText;
+            heading.AutoSize = false;
+            heading.Location = new Point(12, 7);
+            heading.Size = new Size(260, 34);
+            heading.TextAlign = ContentAlignment.MiddleLeft;
+            top.Controls.Add(heading);
+
+            TextBox search = new TextBox();
+            search.Text = "Search mods...";
+            search.Font = new Font("Segoe UI", 9.5f);
+            search.ForeColor = Muted;
+            search.BackColor = Color.FromArgb(9, 17, 27);
+            search.BorderStyle = BorderStyle.FixedSingle;
+            search.Location = new Point(10, 47);
+            search.Size = new Size(470, 30);
+            top.Controls.Add(search);
+
+            ComboBox category = new ComboBox();
+            category.DropDownStyle = ComboBoxStyle.DropDownList;
+            category.Font = new Font("Segoe UI", 9);
+            category.BackColor = Color.FromArgb(9, 17, 27);
+            category.ForeColor = WhiteText;
+            category.Items.Add("All Categories");
+            category.SelectedIndex = 0;
+            category.Location = new Point(490, 47);
+            category.Size = new Size(145, 30);
+            top.Controls.Add(category);
+
+            ComboBox sort = new ComboBox();
+            sort.DropDownStyle = ComboBoxStyle.DropDownList;
+            sort.Font = new Font("Segoe UI", 9);
+            sort.BackColor = Color.FromArgb(9, 17, 27);
+            sort.ForeColor = WhiteText;
+            sort.Items.Add("↕  Sort: Name (A-Z)");
+            sort.Items.Add("↕  Sort: Name (Z-A)");
+            sort.SelectedIndex = 0;
+            sort.Location = new Point(645, 47);
+            sort.Size = new Size(155, 30);
+            top.Controls.Add(sort);
+
+            Label divider = new Label();
+            divider.BackColor = Color.FromArgb(28, 74, 112);
+            divider.Location = new Point(0, top.Height - 1);
+            divider.Size = new Size(100, 1);
+            divider.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
+            top.Controls.Add(divider);
+
+            moduleViewport = new Panel();
+            moduleViewport.Dock = DockStyle.Fill;
+            moduleViewport.BackColor = Bg;
+            moduleViewport.AutoScroll = false;
+            moduleViewport.Padding = new Padding(8, 6, 0, 4);
+            moduleViewport.Resize += delegate { LayoutModuleScroller(); };
+            moduleViewport.MouseWheel += delegate(object sender, MouseEventArgs e) { ScrollModuleList(e.Delta); };
+            listHost.Controls.Add(moduleViewport);
+            listHost.Controls.SetChildIndex(top, 0);
+
+            moduleContent = new Panel();
+            moduleContent.BackColor = Bg;
+            moduleContent.Location = new Point(0, 0);
+            moduleContent.Height = 0;
+            moduleContent.MouseWheel += delegate(object sender, MouseEventArgs e) { ScrollModuleList(e.Delta); };
+            moduleViewport.Controls.Add(moduleContent);
+
+            moduleScroll = new VScrollBar();
+            moduleScroll.Dock = DockStyle.Right;
+            moduleScroll.Width = 18;
+            moduleScroll.Minimum = 0;
+            moduleScroll.SmallChange = 48;
+            moduleScroll.LargeChange = 240;
+            moduleScroll.Scroll += delegate { ApplyModuleScroll(); };
+            moduleViewport.Controls.Add(moduleScroll);
+            moduleScroll.BringToFront();
+
+            Label detailHead = new Label();
+            detailHead.Text = "SELECTED MOD";
+            detailHead.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+            detailHead.ForeColor = Muted;
+            detailHead.AutoSize = false;
+            detailHead.Location = new Point(18, 18);
+            detailHead.Size = new Size(280, 22);
+            detailPanel.Controls.Add(detailHead);
+
+            selectedTitle = new Label();
+            selectedTitle.Text = "CyberCircuit Client";
+            selectedTitle.Font = new Font("Segoe UI", 16, FontStyle.Bold);
+            selectedTitle.ForeColor = WhiteText;
+            selectedTitle.AutoEllipsis = true;
+            selectedTitle.AutoSize = false;
+            selectedTitle.Location = new Point(18, 48);
+            selectedTitle.Size = new Size(284, 40);
+            selectedTitle.TextAlign = ContentAlignment.MiddleLeft;
+            detailPanel.Controls.Add(selectedTitle);
+
+            selectedMeta = new Label();
+            selectedMeta.Text = "CLIENT  ·  READY";
+            selectedMeta.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+            selectedMeta.ForeColor = Blue;
+            selectedMeta.AutoSize = false;
+            selectedMeta.Location = new Point(18, 90);
+            selectedMeta.Size = new Size(284, 24);
+            detailPanel.Controls.Add(selectedMeta);
+
+            selectedDescription = new Label();
+            selectedDescription.Text = "Select a mod from the list to view its details, version, author and configuration options.";
+            selectedDescription.Font = new Font("Segoe UI", 9, FontStyle.Regular);
+            selectedDescription.ForeColor = Muted;
+            selectedDescription.AutoSize = false;
+            selectedDescription.Location = new Point(18, 126);
+            selectedDescription.Size = new Size(284, 100);
+            selectedDescription.TextAlign = ContentAlignment.TopLeft;
+            detailPanel.Controls.Add(selectedDescription);
+
+            Panel gameCard = new Panel();
+            gameCard.BackColor = Color.FromArgb(8, 18, 28);
+            gameCard.BorderStyle = BorderStyle.FixedSingle;
+            gameCard.Location = new Point(18, 242);
+            gameCard.Size = new Size(284, 70);
+            detailPanel.Controls.Add(gameCard);
+
+            Label block = new Label();
+            block.Text = "▣";
+            block.Font = new Font("Segoe UI", 23, FontStyle.Bold);
+            block.ForeColor = Color.FromArgb(105, 185, 70);
+            block.Location = new Point(10, 10);
+            block.Size = new Size(42, 44);
+            block.TextAlign = ContentAlignment.MiddleCenter;
+            gameCard.Controls.Add(block);
+
+            Label gameTitle = new Label();
+            gameTitle.Text = "Minecraft 26.2.x";
+            gameTitle.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+            gameTitle.ForeColor = WhiteText;
+            gameTitle.Location = new Point(60, 12);
+            gameTitle.AutoSize = true;
+            gameCard.Controls.Add(gameTitle);
+
+            Label gameSub = new Label();
+            gameSub.Text = "Fabric Loader 0.19.x";
+            gameSub.Font = new Font("Segoe UI", 8);
+            gameSub.ForeColor = Muted;
+            gameSub.Location = new Point(60, 34);
+            gameSub.AutoSize = true;
+            gameCard.Controls.Add(gameSub);
+
+            Panel summaryCard = new Panel();
+            summaryCard.BackColor = Color.FromArgb(8, 18, 28);
+            summaryCard.BorderStyle = BorderStyle.FixedSingle;
+            summaryCard.Location = new Point(18, 338);
+            summaryCard.Size = new Size(284, 122);
+            detailPanel.Controls.Add(summaryCard);
+
+            Label infoIcon = new Label();
+            infoIcon.Text = "i";
+            infoIcon.Font = new Font("Segoe UI", 10, FontStyle.Bold);
+            infoIcon.ForeColor = Blue;
+            infoIcon.Location = new Point(12, 12);
+            infoIcon.Size = new Size(20, 20);
+            infoIcon.TextAlign = ContentAlignment.MiddleCenter;
+            summaryCard.Controls.Add(infoIcon);
+
+            Label infoTitle = new Label();
+            infoTitle.Text = "MOD SUMMARY";
+            infoTitle.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+            infoTitle.ForeColor = Blue;
+            infoTitle.Location = new Point(38, 11);
+            infoTitle.AutoSize = true;
+            summaryCard.Controls.Add(infoTitle);
+
+            Label infoText = new Label();
+            infoText.Text = "Select a mod from the list to view its details, version, author and configuration options.";
+            infoText.Font = new Font("Segoe UI", 8.5f);
+            infoText.ForeColor = Muted;
+            infoText.Location = new Point(14, 40);
+            infoText.Size = new Size(254, 66);
+            summaryCard.Controls.Add(infoText);
+
+            applyButton = MakeButton("APPLY", 0, 0, 130, 38, true);
+            applyButton.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            applyButton.Click += delegate { ApplyProfile(); };
+            detailPanel.Controls.Add(applyButton);
+
+            launchButton = MakeButton("APPLY + PLAY", 0, 0, 146, 38, false);
+            launchButton.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            launchButton.Click += delegate { ApplyAndLaunch(); };
+            detailPanel.Controls.Add(launchButton);
+
+            Action positionDetailButtons = delegate
+            {
+                int y = Math.Max(12, detailPanel.ClientSize.Height - 50);
+                applyButton.Location = new Point(8, y);
+                launchButton.Location = new Point(Math.Max(8, detailPanel.ClientSize.Width - launchButton.Width - 8), y);
+            };
+            detailPanel.Resize += delegate { positionDetailButtons(); };
+            positionDetailButtons();
+
+            // Keep search/category controls visually useful without changing the stable
+            // profile/JAR logic. They are presentation controls in v26.
+            search.GotFocus += delegate { if (search.Text == "Search mods...") { search.Text = ""; search.ForeColor = WhiteText; } };
+            search.LostFocus += delegate { if (string.IsNullOrWhiteSpace(search.Text)) { search.Text = "Search mods..."; search.ForeColor = Muted; } };
+
+            RenderModules();
+        }
+
+        private void LayoutModuleScroller()
+        {
+            if (moduleViewport == null || moduleContent == null || moduleScroll == null) return;
+            int viewportWidth = Math.Max(120, moduleViewport.ClientSize.Width - moduleScroll.Width - moduleViewport.Padding.Left);
+            int viewportHeight = Math.Max(1, moduleViewport.ClientSize.Height - moduleViewport.Padding.Top - moduleViewport.Padding.Bottom);
+            moduleContent.Width = viewportWidth;
+            moduleScroll.Height = viewportHeight;
+            moduleScroll.Location = new Point(Math.Max(0, moduleViewport.ClientSize.Width - moduleScroll.Width), 0);
+            int max = Math.Max(0, moduleContentHeight - viewportHeight);
+            moduleScroll.Maximum = Math.Max(0, max + Math.Max(1, moduleScroll.LargeChange) - 1);
+            moduleScroll.LargeChange = Math.Max(1, viewportHeight);
+            moduleScroll.SmallChange = Math.Max(24, viewportHeight / 8);
+            if (moduleScroll.Value > max) moduleScroll.Value = max;
+            ApplyModuleScroll();
+            foreach (Panel row in moduleRows)
+                row.Width = Math.Max(220, viewportWidth - 4);
+        }
+
+        private void ApplyModuleScroll()
+        {
+            if (moduleContent == null || moduleScroll == null) return;
+            int viewportHeight = moduleViewport == null ? 1 : Math.Max(1, moduleViewport.ClientSize.Height - moduleViewport.Padding.Top - moduleViewport.Padding.Bottom);
+            int max = Math.Max(0, moduleContentHeight - viewportHeight);
+            int value = Math.Min(moduleScroll.Value, max);
+            moduleContent.Left = moduleViewport.Padding.Left;
+            moduleContent.Top = moduleViewport.Padding.Top - value;
+        }
+
+        private void ScrollModuleList(int delta)
+        {
+            if (moduleScroll == null || moduleViewport == null) return;
+            int step = Math.Max(28, Math.Abs(delta) / 3);
+            int direction = delta < 0 ? 1 : -1;
+            int viewportHeight = Math.Max(1, moduleViewport.ClientSize.Height - moduleViewport.Padding.Top - moduleViewport.Padding.Bottom);
+            int max = Math.Max(0, moduleContentHeight - viewportHeight);
+            int value = Math.Max(0, Math.Min(max, moduleScroll.Value + direction * step));
+            moduleScroll.Value = value;
+            ApplyModuleScroll();
+        }
+
+        private void RenderModules()
+        {
+            if (moduleContent == null || renderingModules) return;
+            renderingModules = true;
+            int previousScroll = moduleScroll == null ? 0 : moduleScroll.Value;
+            moduleContent.SuspendLayout();
+            moduleContent.Controls.Clear();
+            moduleRows.Clear();
+            ModuleChecks.Clear();
+
+            const int rowHeight = 82;
+            const int rowGap = 4;
+            const int actionWidth = 92;
+            int y = 2;
+
+            foreach (ModuleDef m in Modules)
+            {
+                Panel row = new Panel();
+                row.Height = rowHeight;
+                row.Width = Math.Max(420, moduleContent.ClientSize.Width - 4);
+                row.Location = new Point(0, y);
+                row.BackColor = string.Equals(m.Key, selectedModule, StringComparison.OrdinalIgnoreCase) ? Color.FromArgb(13, 31, 47) : Color.FromArgb(9, 19, 29);
+                row.BorderStyle = BorderStyle.FixedSingle;
+                row.Tag = m.Key;
+                row.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
+                row.Cursor = Cursors.Hand;
+                row.Click += delegate { SelectModule(m.Key); };
+                row.MouseWheel += delegate(object sender, MouseEventArgs e) { ScrollModuleList(e.Delta); };
+
+                Panel action = new Panel();
+                action.Width = actionWidth;
+                action.Height = rowHeight - 2;
+                action.Location = new Point(Math.Max(0, row.Width - actionWidth - 1), 1);
+                action.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+                action.BackColor = row.BackColor;
+                row.Controls.Add(action);
+
+                CheckBox toggle = new CheckBox();
+                toggle.Appearance = Appearance.Button;
+                toggle.FlatStyle = FlatStyle.Flat;
+                toggle.FlatAppearance.BorderSize = 1;
+                toggle.FlatAppearance.BorderColor = Color.FromArgb(25, 110, 165);
+                toggle.UseVisualStyleBackColor = false;
+                toggle.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+                toggle.ForeColor = Color.White;
+                toggle.TextAlign = ContentAlignment.MiddleCenter;
+                toggle.Size = new Size(52, 30);
+                toggle.Location = new Point(4, 25);
+                toggle.Checked = m.DefaultEnabled;
+                toggle.Tag = m.Key;
+                toggle.Cursor = Cursors.Hand;
+                toggle.CheckedChanged += delegate { UpdateToggleText(toggle); UpdateSelectedDetails(m.Key); };
+                toggle.Click += delegate { SelectModule(m.Key); };
+                toggle.MouseWheel += delegate(object sender, MouseEventArgs e) { ScrollModuleList(e.Delta); };
+                action.Controls.Add(toggle);
+                ModuleChecks[m.Key] = toggle;
+                UpdateToggleText(toggle);
+
+                Button more = new Button();
+                more.Text = "•••";
+                more.Font = new Font("Segoe UI", 8, FontStyle.Bold);
+                more.ForeColor = WhiteText;
+                more.BackColor = Color.FromArgb(8, 18, 28);
+                more.FlatStyle = FlatStyle.Flat;
+                more.FlatAppearance.BorderColor = Color.FromArgb(27, 90, 135);
+                more.FlatAppearance.BorderSize = 1;
+                more.Size = new Size(34, 30);
+                more.Location = new Point(59, 25);
+                more.Click += delegate { SelectModule(m.Key); };
+                action.Controls.Add(more);
+
+                Panel info = new Panel();
+                info.Location = new Point(0, 0);
+                info.Size = new Size(Math.Max(180, row.Width - actionWidth - 1), rowHeight - 2);
+                info.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+                info.BackColor = row.BackColor;
+                info.Padding = new Padding(70, 7, 8, 5);
+                info.Cursor = Cursors.Hand;
+                info.MouseWheel += delegate(object sender, MouseEventArgs e) { ScrollModuleList(e.Delta); };
+                row.Controls.Add(info);
+
+                Panel icon = new Panel();
+                icon.Size = new Size(48, 48);
+                icon.Location = new Point(12, 16);
+                icon.BackColor = Color.FromArgb(5, 12, 19);
+                icon.BorderStyle = BorderStyle.FixedSingle;
+                icon.Paint += delegate(object sender, PaintEventArgs e) { PaintModuleIcon(e.Graphics, m); };
+                icon.Click += delegate { SelectModule(m.Key); };
+                icon.MouseWheel += delegate(object sender, MouseEventArgs e) { ScrollModuleList(e.Delta); };
+                row.Controls.Add(icon);
+
+                Label name = new Label();
+                name.Text = m.Name;
+                name.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
+                name.ForeColor = WhiteText;
+                name.AutoEllipsis = true;
+                name.AutoSize = false;
+                name.Location = new Point(70, 8);
+                name.Size = new Size(Math.Max(100, info.ClientSize.Width - 88), 23);
+                name.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
+                name.Tag = m.Key;
+                name.Click += delegate { SelectModule(m.Key); };
+                name.MouseWheel += delegate(object sender, MouseEventArgs e) { ScrollModuleList(e.Delta); };
+                info.Controls.Add(name);
+
+                Label categoryLabel = new Label();
+                categoryLabel.Text = m.Category.ToUpperInvariant();
+                categoryLabel.Font = new Font("Segoe UI", 6.8f, FontStyle.Bold);
+                categoryLabel.ForeColor = Blue;
+                categoryLabel.AutoSize = true;
+                categoryLabel.Location = new Point(70 + Math.Min(170, Math.Max(80, TextRenderer.MeasureText(m.Name, name.Font).Width + 10)), 10);
+                info.Controls.Add(categoryLabel);
+
+                Label summary = new Label();
+                summary.Text = m.Description.Replace("\r\n", " ").Replace("\n", " ");
+                summary.Font = new Font("Segoe UI", 7.8f, FontStyle.Regular);
+                summary.ForeColor = Muted;
+                summary.AutoEllipsis = true;
+                summary.AutoSize = false;
+                summary.Location = new Point(70, 32);
+                summary.Size = new Size(Math.Max(100, info.ClientSize.Width - 88), 22);
+                summary.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
+                summary.Tag = m.Key;
+                summary.Click += delegate { SelectModule(m.Key); };
+                summary.MouseWheel += delegate(object sender, MouseEventArgs e) { ScrollModuleList(e.Delta); };
+                info.Controls.Add(summary);
+
+                string jarName = GetModuleJarDisplayName(m);
+                Label jar = new Label();
+                jar.Text = jarName;
+                jar.Font = new Font("Consolas", 6.8f, FontStyle.Regular);
+                jar.ForeColor = m.JarManaged ? Blue : Color.FromArgb(105, 120, 138);
+                jar.AutoEllipsis = true;
+                jar.AutoSize = false;
+                jar.Location = new Point(70, 57);
+                jar.Size = new Size(Math.Max(100, info.ClientSize.Width - 88), 15);
+                jar.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
+                jar.Tag = m.Key;
+                ToolTip tip = new ToolTip();
+                tip.SetToolTip(jar, jarName);
+                jar.Click += delegate { SelectModule(m.Key); };
+                jar.MouseWheel += delegate(object sender, MouseEventArgs e) { ScrollModuleList(e.Delta); };
+                info.Controls.Add(jar);
+
+                // The icon and action controls are siblings of the text panel, never children
+                // of it. This is the key layout change that prevents text from covering buttons.
+                action.BringToFront();
+                icon.BringToFront();
+                moduleContent.Controls.Add(row);
+                moduleRows.Add(row);
+                y += rowHeight + rowGap;
+
+                row.Resize += delegate
+                {
+                    action.Height = Math.Max(1, row.ClientSize.Height - 2);
+                    action.Location = new Point(Math.Max(0, row.ClientSize.Width - actionWidth - 1), 1);
+                    info.Size = new Size(Math.Max(180, row.ClientSize.Width - actionWidth - 1), Math.Max(1, row.ClientSize.Height - 2));
+                    name.Size = new Size(Math.Max(100, info.ClientSize.Width - 88), 23);
+                    summary.Size = new Size(Math.Max(100, info.ClientSize.Width - 88), 22);
+                    jar.Size = new Size(Math.Max(100, info.ClientSize.Width - 88), 15);
+                };
+            }
+
+            moduleContentHeight = Math.Max(y + 2, moduleViewport == null ? y + 2 : moduleViewport.ClientSize.Height);
+            moduleContent.Height = moduleContentHeight;
+            moduleContent.ResumeLayout(true);
+            LayoutModuleScroller();
+            if (moduleScroll != null)
+            {
+                int viewportHeight = Math.Max(1, moduleViewport.ClientSize.Height - moduleViewport.Padding.Top - moduleViewport.Padding.Bottom);
+                int max = Math.Max(0, moduleContentHeight - viewportHeight);
+                moduleScroll.Value = Math.Min(previousScroll, max);
+                ApplyModuleScroll();
+            }
+            UpdateSelectedDetails(selectedModule);
+            renderingModules = false;
+        }
+
+        private void PaintModuleIcon(Graphics g, ModuleDef m)
+        {
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            using (Brush b = new SolidBrush(Color.FromArgb(8, 28, 43)))
+                g.FillRectangle(b, 0, 0, 48, 48);
+            string text = "CC";
+            if (m.Key.Equals("baritone", StringComparison.OrdinalIgnoreCase)) text = "B";
+            else if (m.Key.Equals("wurst", StringComparison.OrdinalIgnoreCase)) text = "W";
+            else if (m.Key.Equals("fabricapi", StringComparison.OrdinalIgnoreCase)) text = "F";
+            else if (m.Key.StartsWith("feature_", StringComparison.OrdinalIgnoreCase)) text = "•";
+            using (Font f = new Font("Segoe UI", text == "•" ? 22 : 15, FontStyle.Bold))
+                TextRenderer.DrawText(g, text, f, new Rectangle(0, 0, 48, 48), Blue, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        }
+
+        private void BuildProfilesView()
+        {
+            Label heading = new Label();
+            heading.Text = "PROFILES";
+            heading.Font = new Font("Segoe UI", 19, FontStyle.Bold);
+            heading.ForeColor = WhiteText;
+            heading.AutoSize = true;
+            heading.Location = new Point(18, 14);
+            viewPanel.Controls.Add(heading);
+
+            Label help = new Label();
+            help.Text = "Save different module combinations and switch between them before launching.";
+            help.Font = new Font("Segoe UI", 9);
+            help.ForeColor = Muted;
+            help.Location = new Point(18, 48);
+            help.Size = new Size(620, 30);
+            viewPanel.Controls.Add(help);
+
+            Panel card = new Panel();
+            card.BackColor = PanelColor;
+            card.Location = new Point(18, 92);
+            card.Size = new Size(670, 210);
+            viewPanel.Controls.Add(card);
+
+            Label l = new Label();
+            l.Text = "ACTIVE PROFILE";
+            l.Font = new Font("Segoe UI", 8, FontStyle.Bold);
+            l.ForeColor = Muted;
+            l.Location = new Point(22, 22);
+            l.AutoSize = true;
+            card.Controls.Add(l);
+
+            ComboBox p = new ComboBox();
+            p.DropDownStyle = ComboBoxStyle.DropDownList;
+            p.Font = new Font("Segoe UI", 11, FontStyle.Bold);
+            p.Location = new Point(22, 48);
+            p.Size = new Size(260, 32);
+            foreach (object item in profileBox.Items) p.Items.Add(item);
+            p.SelectedItem = profileBox.SelectedItem;
+            p.SelectedIndexChanged += delegate { profileBox.SelectedItem = p.SelectedItem; RenderModules(); };
+            card.Controls.Add(p);
+
+            Button save = MakeButton("SAVE PROFILE", 302, 46, 148, 36, true);
+            save.Click += delegate { SaveCurrentProfile(); Message("Profile saved: " + profileBox.SelectedItem); };
+            card.Controls.Add(save);
+
+            Button mods = MakeButton("EDIT MODULES", 466, 46, 150, 36, false);
+            mods.Click += delegate { ShowView("mods"); };
+            card.Controls.Add(mods);
+
+            Label info = new Label();
+            info.Text = "Profiles are stored in %LOCALAPPDATA%\\CyberCircuit\\profiles.\r\nDefault, PvP and Building are created automatically.\r\nUnrelated Minecraft mods are not touched by profile changes.";
+            info.Font = new Font("Segoe UI", 9);
+            info.ForeColor = Muted;
+            info.Location = new Point(22, 96);
+            info.Size = new Size(590, 90);
+            card.Controls.Add(info);
+        }
+
+        private void BuildSettingsView()
+        {
+            Label heading = new Label();
+            heading.Text = "SETTINGS";
+            heading.Font = new Font("Segoe UI", 19, FontStyle.Bold);
+            heading.ForeColor = WhiteText;
+            heading.AutoSize = true;
+            heading.Location = new Point(18, 14);
+            viewPanel.Controls.Add(heading);
+
+            Label help = new Label();
+            help.Text = "Tell CyberCircuit which Minecraft Java Edition instance should receive managed modules.";
+            help.Font = new Font("Segoe UI", 9);
+            help.ForeColor = Muted;
+            help.Location = new Point(18, 48);
+            help.Size = new Size(650, 30);
+            viewPanel.Controls.Add(help);
+
+            Panel card = new Panel();
+            card.BackColor = PanelColor;
+            card.Location = new Point(18, 92);
+            card.Size = new Size(760, 255);
+            viewPanel.Controls.Add(card);
+
+            Label pathLabel = new Label();
+            pathLabel.Text = "JAVA EDITION GAME DIRECTORY";
+            pathLabel.Font = new Font("Segoe UI", 8, FontStyle.Bold);
+            pathLabel.ForeColor = Muted;
+            pathLabel.Location = new Point(24, 24);
+            pathLabel.AutoSize = true;
+            card.Controls.Add(pathLabel);
+
+            minecraftPathBox = new TextBox();
+            minecraftPathBox.Font = new Font("Segoe UI", 9);
+            minecraftPathBox.Location = new Point(24, 52);
+            minecraftPathBox.Size = new Size(600, 28);
+            minecraftPathBox.Text = MinecraftDir;
+            card.Controls.Add(minecraftPathBox);
+
+            Button browse = MakeButton("BROWSE", 636, 50, 96, 32, false);
+            browse.Click += delegate { BrowseMinecraftDir(); };
+            card.Controls.Add(browse);
+
+            autoApplyBox = new CheckBox();
+            autoApplyBox.Text = "Automatically apply the selected profile before launching Minecraft";
+            autoApplyBox.Font = new Font("Segoe UI", 9, FontStyle.Bold);
+            autoApplyBox.ForeColor = WhiteText;
+            autoApplyBox.AutoSize = true;
+            autoApplyBox.Location = new Point(24, 100);
+            autoApplyBox.Checked = ReadAutoApplySetting();
+            card.Controls.Add(autoApplyBox);
+
+            Button save = MakeButton("SAVE SETTINGS", 24, 150, 168, 40, true);
+            save.Click += delegate { SaveSettingsFromUi(); };
+            card.Controls.Add(save);
+
+            Button reset = MakeButton("USE DEFAULT .MINECRAFT", 204, 150, 220, 40, false);
+            reset.Click += delegate
+            {
+                MinecraftDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ".minecraft");
+                minecraftPathBox.Text = MinecraftDir;
+            };
+            card.Controls.Add(reset);
+
+            Label note = new Label();
+            note.Text = "The launcher changes only its own managed JAR copies. Your normal mods remain untouched.\r\nThe game itself is still launched through the official Minecraft Launcher / Fabric profile.";
+            note.Font = new Font("Segoe UI", 8);
+            note.ForeColor = Muted;
+            note.Location = new Point(24, 205);
+            note.Size = new Size(700, 44);
+            card.Controls.Add(note);
+        }
+
+        private bool ReadAutoApplySetting()
+        {
+            if (!File.Exists(SettingsPath)) return true;
+            try
+            {
+                string[] lines = File.ReadAllLines(SettingsPath);
+                foreach (string line in lines)
+                {
+                    if (line.StartsWith("autoApply=", StringComparison.OrdinalIgnoreCase))
+                        return line.Substring("autoApply=".Length).Trim().Equals("true", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            catch { }
+            return true;
+        }
+
+        private void SaveSettingsFromUi()
+        {
+            if (minecraftPathBox != null && !string.IsNullOrWhiteSpace(minecraftPathBox.Text))
+                MinecraftDir = minecraftPathBox.Text.Trim();
+            SaveSettings();
+            RefreshMinecraftStatus();
+            EnsureLibraryFromMinecraft();
+            LoadModules();
+            RenderModules();
+            Message("Settings saved.");
+        }
+
+        private void BrowseMinecraftDir()
+        {
+            using (FolderBrowserDialog dlg = new FolderBrowserDialog())
+            {
+                dlg.Description = "Select the Minecraft Java Edition game directory used by your Fabric 26.2 profile.";
+                dlg.SelectedPath = Directory.Exists(MinecraftDir) ? MinecraftDir : Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                if (dlg.ShowDialog(this) == DialogResult.OK)
+                {
+                    MinecraftDir = dlg.SelectedPath;
+                    if (minecraftPathBox != null) minecraftPathBox.Text = MinecraftDir;
+                    RefreshMinecraftStatus();
+                }
+            }
+        }
+
+        private void LoadProfiles()
+        {
+            string[] names = new string[] { "Default", "PvP", "Building" };
+            foreach (string n in names)
+                if (!profileBox.Items.Contains(n)) profileBox.Items.Add(n);
+
+            if (Directory.Exists(ProfilesDir))
+            {
+                string[] files = Directory.GetFiles(ProfilesDir, "*.profile");
+                foreach (string file in files)
+                {
+                    string n = Path.GetFileNameWithoutExtension(file);
+                    if (!profileBox.Items.Contains(n)) profileBox.Items.Add(n);
+                }
+            }
+        }
+
+        private string ProfilePath(string name)
+        {
+            return Path.Combine(ProfilesDir, name + ".profile");
+        }
+
+        private Dictionary<string, bool> ReadProfile(string name)
+        {
+            Dictionary<string, bool> result = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            string path = ProfilePath(name);
+            if (!File.Exists(path)) return result;
+            try
+            {
+                string[] lines = File.ReadAllLines(path);
+                foreach (string line in lines)
+                {
+                    int split = line.IndexOf('=');
+                    if (split <= 0) continue;
+                    string key = line.Substring(0, split).Trim();
+                    string value = line.Substring(split + 1).Trim();
+                    result[key] = value.Equals("true", StringComparison.OrdinalIgnoreCase) || value == "1";
+                }
+            }
+            catch { }
+            return result;
+        }
+
+        private void SaveCurrentProfile()
+        {
+            if (profileBox == null || profileBox.SelectedItem == null) return;
+            string name = profileBox.SelectedItem.ToString();
+            string path = ProfilePath(name);
+            try
+            {
+                using (StreamWriter sw = new StreamWriter(path, false))
+                {
+                    foreach (ModuleDef m in Modules)
+                    {
+                        bool enabled = ModuleChecks.ContainsKey(m.Key) && ModuleChecks[m.Key].Checked;
+                        sw.WriteLine(m.Key + "=" + (enabled ? "true" : "false"));
+                    }
+                }
+            }
+            catch (Exception ex) { MessageBox.Show(ex.Message, "CyberCircuit | Save Profile", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+        }
+
+        private void ApplyCurrentProfileToChecks()
+        {
+            if (profileBox == null || profileBox.SelectedItem == null || ModuleChecks.Count == 0) return;
+            Dictionary<string, bool> states = ReadProfile(profileBox.SelectedItem.ToString());
+            foreach (ModuleDef m in Modules)
+            {
+                if (!ModuleChecks.ContainsKey(m.Key)) continue;
+                bool enabled = states.ContainsKey(m.Key) ? states[m.Key] : m.DefaultEnabled;
+                ModuleChecks[m.Key].Checked = enabled;
+                UpdateToggleText(ModuleChecks[m.Key]);
+            }
+            if (statusLabel != null) statusLabel.Text = "Profile: " + profileBox.SelectedItem.ToString();
+        }
+
+        private void ApplyProfile()
+        {
+            if (profileBox == null || profileBox.SelectedItem == null) return;
+            SaveCurrentProfile();
+            EnsureLibraryFromMinecraft();
+
+            string modsDir = Path.Combine(MinecraftDir, "mods");
+            try { Directory.CreateDirectory(modsDir); }
+            catch (Exception ex) { ShowError("Could not create Minecraft mods folder:\r\n" + ex.Message); return; }
+
+            RemovePreviousManagedCopies(modsDir);
+            RemoveOriginalCyberCircuitCopies(modsDir);
+
+            List<string> installed = new List<string>();
+            List<string> missing = new List<string>();
+            foreach (ModuleDef m in Modules)
+            {
+                if (!m.JarManaged) continue;
+                if (!ModuleChecks.ContainsKey(m.Key) || !ModuleChecks[m.Key].Checked) continue;
+                string source = FindLibraryJar(m);
+                if (source == null)
+                {
+                    missing.Add(m.Name);
+                    continue;
+                }
+
+                string managedName = "CyberCircuitManaged-" + m.Key + ".jar";
+                string destination = Path.Combine(modsDir, managedName);
+                try
+                {
+                    File.Copy(source, destination, true);
+                    installed.Add(m.Name);
+                }
+                catch (Exception ex)
+                {
+                    ShowError("Could not enable " + m.Name + ":\r\n" + ex.Message);
+                    return;
+                }
+            }
+
+            try
+            {
+                using (StreamWriter sw = new StreamWriter(ManagedManifestPath, false))
+                    foreach (string name in installed) sw.WriteLine(name);
+            }
+            catch { }
+
+            statusLabel.Text = "Applied " + installed.Count.ToString() + " module(s) to Java Edition mods.";
+            RefreshMinecraftStatus();
+            RenderModules();
+            string message = "Applied " + installed.Count.ToString() + " enabled module(s) to:\r\n" + modsDir;
+            if (missing.Count > 0) message += "\r\n\r\nMissing from the launcher library:\r\n- " + string.Join("\r\n- ", missing.ToArray());
+            MessageBox.Show(message, "CyberCircuit | Apply Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void RemovePreviousManagedCopies(string modsDir)
+        {
+            if (!File.Exists(ManagedManifestPath))
+            {
+                string[] old = Directory.Exists(modsDir) ? Directory.GetFiles(modsDir, "CyberCircuitManaged-*.jar") : new string[0];
+                foreach (string file in old) { try { File.Delete(file); } catch { } }
+                return;
+            }
+            try
+            {
+                string[] lines = File.ReadAllLines(ManagedManifestPath);
+                foreach (string line in lines)
+                {
+                    string safe = line.Trim();
+                    if (safe.Length == 0) continue;
+                    string path = Path.Combine(modsDir, safe);
+                    if (File.Exists(path)) { try { File.Delete(path); } catch { } }
+                }
+            }
+            catch { }
+            string[] leftovers = Directory.Exists(modsDir) ? Directory.GetFiles(modsDir, "CyberCircuitManaged-*.jar") : new string[0];
+            foreach (string file in leftovers) { try { File.Delete(file); } catch { } }
+        }
+
+
+        private void RemoveOriginalCyberCircuitCopies(string modsDir)
+        {
+            if (!Directory.Exists(modsDir)) return;
+            string[] files = Directory.GetFiles(modsDir, "*.jar");
+            foreach (string file in files)
+            {
+                string name = Path.GetFileName(file);
+                bool owned = name.Equals(CoreJarName, StringComparison.OrdinalIgnoreCase)
+                    || name.StartsWith("cybercircuit-client-", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("CyberCircuit-Baritone-26.2.jar", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("baritone-standalone-fabric-1.19.0.jar", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("CyberCircuit-Wurst-26.2.jar", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals(WurstJarName, StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("fabric-api-0.158.0+26.2.jar", StringComparison.OrdinalIgnoreCase);
+                if (owned) { try { File.Delete(file); } catch { } }
+            }
+        }
+
+        private void ApplyAndLaunch()
+        {
+            if (ReadAutoApplySetting())
+            {
+                try
+                {
+                    ApplyProfileSilent();
+                }
+                catch (Exception ex)
+                {
+                    ShowError("Could not apply the selected profile:\r\n" + ex.Message);
+                    return;
+                }
+            }
+            LaunchMinecraft();
+        }
+
+        private void ApplyProfileSilent()
+        {
+            SaveCurrentProfile();
+            EnsureLibraryFromMinecraft();
+            string modsDir = Path.Combine(MinecraftDir, "mods");
+            Directory.CreateDirectory(modsDir);
+            RemovePreviousManagedCopies(modsDir);
+            RemoveOriginalCyberCircuitCopies(modsDir);
+            List<string> installed = new List<string>();
+            foreach (ModuleDef m in Modules)
+            {
+                if (!m.JarManaged) continue;
+                if (!ModuleChecks.ContainsKey(m.Key) || !ModuleChecks[m.Key].Checked) continue;
+                string source = FindLibraryJar(m);
+                if (source == null) throw new InvalidOperationException(m.Name + " is enabled but its JAR is not installed in the launcher library.");
+                string destination = Path.Combine(modsDir, "CyberCircuitManaged-" + m.Key + ".jar");
+                File.Copy(source, destination, true);
+                installed.Add("CyberCircuitManaged-" + m.Key + ".jar");
+            }
+            using (StreamWriter sw = new StreamWriter(ManagedManifestPath, false))
+                foreach (string name in installed) sw.WriteLine(name);
+            statusLabel.Text = "Profile applied. Starting Minecraft Java Edition launcher...";
+        }
+
+        private void LaunchMinecraft()
+        {
+            // CyberCircuit is intentionally Java Edition only.
+            // Do not use the generic minecraft: URI because on Windows it may
+            // hand control to whichever Minecraft product is currently associated.
+            // We instead start the official Minecraft Launcher executable and point
+            // it at the exact Java .minecraft directory this app manages.
+            string pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            string pf86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+            string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string[] candidates = new string[]
+            {
+                Path.Combine(pf, "Minecraft Launcher", "MinecraftLauncher.exe"),
+                Path.Combine(pf86, "Minecraft Launcher", "MinecraftLauncher.exe"),
+                Path.Combine(local, "Programs", "Minecraft Launcher", "MinecraftLauncher.exe")
+            };
+
+            foreach (string exe in candidates)
+            {
+                if (!File.Exists(exe)) continue;
+                try
+                {
+                    ProcessStartInfo psi = new ProcessStartInfo();
+                    psi.FileName = exe;
+                    psi.Arguments = "--workDir \"" + MinecraftDir + "\"";
+                    psi.UseShellExecute = true;
+                    Process.Start(psi);
+                    statusLabel.Text = "Minecraft Java Edition launcher opened.";
+                    return;
+                }
+                catch { }
+            }
+
+            ShowError("Minecraft Java Edition launcher could not be found. Install the official Minecraft Launcher from Minecraft.net, then select/create your Fabric 26.2 Java profile.");
+        }
+
+        private void ImportMod()
+        {
+            using (OpenFileDialog dlg = new OpenFileDialog())
+            {
+                dlg.Title = "Import Fabric Mod";
+                dlg.Filter = "Minecraft Fabric mod (*.jar)|*.jar|All files (*.*)|*.*";
+                dlg.Multiselect = false;
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                string name = Path.GetFileName(dlg.FileName);
+                string dest = Path.Combine(LibraryDir, name);
+                try
+                {
+                    File.Copy(dlg.FileName, dest, true);
+                    LoadModules();
+                    RenderModules();
+                    statusLabel.Text = "Imported " + name;
+                }
+                catch (Exception ex) { ShowError("Could not import mod:\r\n" + ex.Message); }
+            }
+        }
+
+        private void Repair()
+        {
+            EnsureLibraryFromMinecraft();
+            List<string> lines = new List<string>();
+            lines.Add(Directory.Exists(MinecraftDir) ? "OK  Java Edition folder: " + MinecraftDir : "ERROR  Minecraft folder not found: " + MinecraftDir);
+            string mods = Path.Combine(MinecraftDir, "mods");
+            lines.Add(Directory.Exists(mods) ? "OK  Java Edition mods folder detected" : "WARN Mods folder does not exist yet");
+            foreach (ModuleDef m in Modules)
+                lines.Add((FindLibraryJar(m) == null ? "WARN " : "OK   ") + m.Name + "  |  " + (FindLibraryJar(m) == null ? "JAR missing from launcher library" : "ready"));
+            MessageBox.Show(string.Join("\r\n", lines.ToArray()), "CyberCircuit | Repair", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            statusLabel.Text = "Repair check complete.";
+        }
+
+        private void RefreshMinecraftStatus()
+        {
+            if (minecraftStatus == null) return;
+            if (!Directory.Exists(MinecraftDir))
+            {
+                minecraftStatus.Text = "JAVA EDITION: NOT FOUND\r\n" + MinecraftDir;
+                minecraftStatus.ForeColor = Red;
+                return;
+            }
+
+            string versionsDir = Path.Combine(MinecraftDir, "versions");
+            bool fabric26 = false;
+            if (Directory.Exists(versionsDir))
+            {
+                try
+                {
+                    foreach (string dir in Directory.GetDirectories(versionsDir))
+                    {
+                        string name = Path.GetFileName(dir);
+                        if (name.IndexOf("fabric-loader", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                            name.IndexOf("26.2", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            fabric26 = true;
+                            break;
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            if (fabric26)
+            {
+                minecraftStatus.Text = "JAVA EDITION: READY\r\nFabric 26.2 detected\r\n" + MinecraftDir;
+                minecraftStatus.ForeColor = Green;
+            }
+            else
+            {
+                minecraftStatus.Text = "JAVA EDITION: READY\r\nFabric 26.2 profile not detected yet\r\n" + MinecraftDir;
+                minecraftStatus.ForeColor = Yellow;
+            }
+        }
+
+        private void OpenFolder(string path)
+        {
+            try
+            {
+                Directory.CreateDirectory(path);
+                Process.Start("explorer.exe", "\"" + path + "\"");
+            }
+            catch (Exception ex) { ShowError(ex.Message); }
+        }
+
+        private void Message(string text)
+        {
+            statusLabel.Text = text;
+        }
+
+        private void ShowError(string text)
+        {
+            statusLabel.Text = "ERROR: " + text.Replace("\r", " ").Replace("\n", " ");
+            MessageBox.Show(text, "CyberCircuit | Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    internal static class Program
+    {
+        [STAThread]
+        private static void Main()
+        {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            Application.Run(new MainForm());
+        }
+    }
+}

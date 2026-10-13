@@ -1,0 +1,15 @@
+CyberCircuit Client 26.2 - Third-Party Notices
+
+This project may download third-party binaries at install time from their official sources.
+
+Baritone
+Project: https://github.com/cabaletta/baritone
+Release used by v22: v1.19.0 (Fabric / Minecraft 26.2)
+License: GNU LGPL v3.0 or later (see the Baritone repository for the complete license text).
+
+Wurst Client
+Project: https://github.com/Wurst-Imperium/Wurst7
+Release used by v22: 7.55.1 (supports Minecraft 26.2)
+License: GNU GPL v3.0 or later (see the Wurst repository for the complete license text).
+
+These modules are installed as separate, unmodified JAR files. Their licensing and terms remain the responsibility of their respective projects.
