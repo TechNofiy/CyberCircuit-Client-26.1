@@ -22,10 +22,10 @@ Download the project ZIP from GitHub and extract it into a folder on your Window
 
 ### 🛠️ 2. Build the client
 
-**IMPORTANT: You must run `build-windows.bat` to build the client.**
+**IMPORTANT: You must run `Install-CyberCircuit.bat` to build the client.**
 
 1. Open the extracted CyberCircuit Client folder.
-2. Find **`build-windows.bat`**.
+2. Find **`Install-CyberCircuit.bat`**.
 3. Double-click the file to launch the build process.
 4. Allow the script to finish. If Windows asks for permission, review the prompt before proceeding.
 5. Read the terminal output for errors or a successful build message.
@@ -38,7 +38,7 @@ If the window reports an error, take a screenshot of the complete error message 
 
 After the script finishes, check its output and the project's build instructions to find the generated client.
 
-The output location depends on how `build-windows.bat` is configured. If the script builds a JAR, follow the project's Minecraft installation instructions to install it. Do not assume the client has been installed automatically.
+The output location depends on how `Install-CyberCircuit.bat` is configured. If the script builds a JAR, follow the project's Minecraft installation instructions to install it. Do not assume the client has been installed automatically.
 
 ---
 
@@ -47,7 +47,7 @@ The output location depends on how `build-windows.bat` is configured. If the scr
 ```mermaid
 flowchart TD
     A["Download Project ZIP"] --> B["Extract Files"]
-    B --> C["Open build-windows.bat"]
+    B --> C["Open Install-CyberCircuit.bat"]
     C --> D["Windows Build Process"]
     D --> E{"Build Successful?"}
     E -->|Yes| F["Locate Generated Output"]
@@ -67,11 +67,11 @@ flowchart TD
 - **Version:** 26.1
 - **Platform:** Windows build workflow
 - **Edition:** Minecraft Java Edition
-- **Build script:** `build-windows.bat`
+- **Build script:** `Install-CyberCircuit.bat`
 
 ## ⚠️ TROUBLESHOOTING
 
-- **The file won't open:** Confirm that you extracted the ZIP and that `build-windows.bat` exists.
+- **The file won't open:** Confirm that you extracted the ZIP and that `Install-CyberCircuit.bat` exists.
 - **The build fails:** Read the terminal output and check the project's prerequisites.
 - **The window closes too quickly:** Run the batch file from an already-open Command Prompt so you can read the output.
 - **You can't find the client:** Check the build script and its output directories for the generated files.
